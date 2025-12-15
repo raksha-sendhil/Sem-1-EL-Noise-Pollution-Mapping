@@ -15,7 +15,7 @@ READ_TIMEOUT = 1         # seconds
 REFRESH_MS = 1000        # update GUI every 1000 ms
 
 # VIOLATION SETTINGS
-VIOLATION_THRESHOLD = 40.0  # dB limit for RVCE/Silence Zone
+VIOLATION_THRESHOLD = 85.0  # dB limit for RVCE/Silence Zone
 VIOLATION_DURATION = 10     # Seconds needed to trigger alert
 
 # ==========================================
