@@ -1,16 +1,26 @@
-# save as db_display.py
 import threading
 import queue
 import time
 import serial
 import tkinter as tk
 from tkinter import font
+from tkinter import messagebox  # Added for the popup
 
-SERIAL_PORT = "COM3"     # change if needed
+# ==========================================
+# CONFIGURATION
+# ==========================================
+SERIAL_PORT = "COM3"     # Change if needed
 BAUDRATE = 115200
 READ_TIMEOUT = 1         # seconds
 REFRESH_MS = 1000        # update GUI every 1000 ms
 
+# VIOLATION SETTINGS
+VIOLATION_THRESHOLD = 40.0  # dB limit for RVCE/Silence Zone
+VIOLATION_DURATION = 10     # Seconds needed to trigger alert
+
+# ==========================================
+# SERIAL READER (Background Thread)
+# ==========================================
 def serial_reader_thread(port, baud, out_queue, stop_event):
     try:
         ser = serial.Serial(port, baud, timeout=READ_TIMEOUT)
@@ -47,14 +57,17 @@ def serial_reader_thread(port, baud, out_queue, stop_event):
     except Exception:
         pass
 
+# ==========================================
+# MAIN GUI APPLICATION
+# ==========================================
 def main():
-    q = queue.Queue(maxsize=1)   # store latest messages (we'll only keep last)
+    q = queue.Queue(maxsize=1)   # store latest messages
     stop_event = threading.Event()
     t = threading.Thread(target=serial_reader_thread, args=(SERIAL_PORT, BAUDRATE, q, stop_event), daemon=True)
     t.start()
 
     root = tk.Tk()
-    root.title("dB Monitor")
+    root.title("RVCE Noise Monitor")
 
     # Heading
     title_font = font.Font(root=root, size=20, weight="bold")
@@ -66,19 +79,29 @@ def main():
     label = tk.Label(root, text="--.- dB", font=big, width=10)
     label.pack(padx=20, pady=10)
 
-
+    # Info Labels
     info = tk.Label(root, text=f"Port: {SERIAL_PORT} @ {BAUDRATE}  —  Last update: --:--:--")
-    info.pack(padx=10, pady=(0,12))
+    info.pack(padx=10, pady=(0,5))
+    
+    # Violation Status Label (To show the user the timer is running)
+    violation_status = tk.Label(root, text="Status: Normal", fg="green", font=("Arial", 10, "bold"))
+    violation_status.pack(pady=(0, 12))
 
     status = tk.Label(root, text="", fg="orange")
     status.pack()
 
+    # State variables
     latest_val = None
     last_time = None
+    
+    # ALERT LOGIC VARIABLES
+    consecutive_high_seconds = 0
+    alert_triggered = False  # To prevent spamming the popup while the box is open
 
     def update_gui():
-        nonlocal latest_val, last_time
-        # drain queue, keep last meaningful value
+        nonlocal latest_val, last_time, consecutive_high_seconds, alert_triggered
+        
+        # 1. Get Data from Queue
         while True:
             try:
                 typ, payload = q.get_nowait()
@@ -89,18 +112,65 @@ def main():
                 last_time = time.strftime("%H:%M:%S")
                 status.config(text="")
             elif typ == "MSG":
-                # optional: show last incoming non-numeric message
                 status.config(text=f"msg: {payload}")
             elif typ == "__ERROR__":
                 status.config(text=f"serial error: {payload}", fg="red")
 
+        # 2. Update GUI Numbers
         if latest_val is None:
             label.config(text="--.- dB")
             info.config(text=f"Port: {SERIAL_PORT} @ {BAUDRATE}  —  Last update: --:--:--")
         else:
             label.config(text=f"{latest_val:.1f} dB")
             info.config(text=f"Port: {SERIAL_PORT} @ {BAUDRATE}  —  Last update: {last_time}")
+            
+            # Change color if high
+            if latest_val > VIOLATION_THRESHOLD:
+                label.config(fg="red")
+            else:
+                label.config(fg="black")
 
+            # 3. NOTIFICATION LOGIC
+            if latest_val > VIOLATION_THRESHOLD:
+                consecutive_high_seconds += (REFRESH_MS / 1000) # Add 1 second
+                
+                # Update status text to show urgency
+                violation_status.config(
+                    text=f"⚠️ WARNING: High Noise Detected ({int(consecutive_high_seconds)}s)", 
+                    fg="orange"
+                )
+
+                # Check if we hit the limit
+                if consecutive_high_seconds >= VIOLATION_DURATION and not alert_triggered:
+                    alert_triggered = True # Stop checking until user closes popup
+                    
+                    # Calculate excess
+                    excess_val = latest_val - VIOLATION_THRESHOLD
+                    
+                    # Show Popup
+                    messagebox.showwarning(
+                        title="⚠️ CPCB VIOLATION ALERT",
+                        message=(
+                            f"LOCATION: RV College of Engineering (Silence Zone)\n\n"
+                            f"CRITICAL ALERT: Noise levels have exceeded {VIOLATION_THRESHOLD} dB "
+                            f"for over {VIOLATION_DURATION} seconds.\n\n"
+                            f"CURRENT LEVEL: {latest_val:.1f} dB\n"
+                            f"EXCESS: +{excess_val:.1f} dB above CPCB Limit\n\n"
+                            f"Action: Notification sent to campus administration."
+                        )
+                    )
+                    
+                    # Reset after popup is closed
+                    consecutive_high_seconds = 0
+                    alert_triggered = False
+                    violation_status.config(text="Status: Alert Sent / Reset", fg="blue")
+
+            else:
+                # Reset if noise drops back down
+                consecutive_high_seconds = 0
+                violation_status.config(text="Status: Normal", fg="green")
+
+        # Schedule next update
         root.after(REFRESH_MS, update_gui)
 
     def on_close():

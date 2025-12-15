@@ -8,7 +8,7 @@
 #define LEQ_UNITS         "LAeq"      
 #define DB_UNITS          "dBA"       
 #define MIC_EQUALIZER     INMP441    
-#define MIC_OFFSET_DB     -5      // calibration value
+#define MIC_OFFSET_DB     -5     // calibration value
 
 
 #define MIC_SENSITIVITY   -26         // dBFS at 94dB SPL at 1kHz tone
