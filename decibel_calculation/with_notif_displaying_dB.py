@@ -3,20 +3,20 @@ import queue
 import time
 import serial
 import tkinter as tk
+
 from tkinter import font
 from tkinter import messagebox  # Added for the popup
 
-# ==========================================
 # CONFIGURATION
-# ==========================================
+
 SERIAL_PORT = "COM3"     # Change if needed
 BAUDRATE = 115200
 READ_TIMEOUT = 1         # seconds
 REFRESH_MS = 1000        # update GUI every 1000 ms
 
 # VIOLATION SETTINGS
-VIOLATION_THRESHOLD = 85.0  # dB limit for RVCE/Silence Zone
-VIOLATION_DURATION = 10     # Seconds needed to trigger alert
+VIOLATION_THRESHOLD = 70.0  # dB limit for RVCE/Silence Zone
+VIOLATION_DURATION = 5   # Seconds needed to trigger alert
 
 # ==========================================
 # SERIAL READER (Background Thread)
